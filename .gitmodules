@@ -1,0 +1,3 @@
+[submodule "dist/cjson"]
+	path = dist/cjson
+	url = git@github.com:kbranigan/cJSON.git
