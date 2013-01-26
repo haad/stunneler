@@ -6,7 +6,7 @@ stunneler
 .*.swp
 #
 # Object files
-*.o
+src/*.o
 #
 # Libraries
 *.lib
