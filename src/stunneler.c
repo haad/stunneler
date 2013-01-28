@@ -26,6 +26,8 @@ static void
 usage(void)
 {
 	printf("stunneler command to persitently call home and open tunnels to local port 22.\n");
+	printf("stunneler [-f conf_file], [-p port] [-u user] [-i private key] [-d dest ip] \n");
+	printf("If both -f and other options are specified at once -f is ignored.");
 	exit(EXIT_SUCCESS);
 }
 
@@ -64,12 +66,12 @@ get_conf_file(char *conf_path)
 
 	if ((mmap_file = malloc(conf_size * sizeof(char))) == NULL) {
 		fprintf(stderr, "Cannot allocate memory for conf_file\n");
-		exit(EXIT_FAILURE);
+		return NULL;
 	}
 
 	if ((conf_f = fopen(conf_path, "r")) == NULL) {
 		fprintf(stderr, "Cannot open config file from %s.\n", STUNEL_CONFIG);
-		exit(EXIT_FAILURE);
+		return NULL;
 	}
 
 	fread(mmap_file, 1, conf_size, conf_f);
@@ -85,31 +87,44 @@ get_conf_file(char *conf_path)
 static int
 rem_ssh_connect(cJSON *json)
 {
-	ssh_session my_ssh_session;
+	ssh_session rem_ssh_session;
 	int verbosity = SSH_LOG_PROTOCOL;
-	int port = 22, rc;
+	int port, rc;
 
-	json = NULL;
+	port = cJSON_GetObjectItem(json, "rem_port")->valueint;
 
-	if ((my_ssh_session  = ssh_new()) == NULL) {
+	if ((rem_ssh_session  = ssh_new()) == NULL) {
 		fprintf(stderr, "Creating new ssh_session failed.\n");
 		exit(EXIT_FAILURE);
 	}
+	ssh_options_set(rem_ssh_session, SSH_OPTIONS_USER, cJSON_GetObjectItem(json, "rem_login")->valuestring);
+	ssh_options_set(rem_ssh_session, SSH_OPTIONS_HOST, cJSON_GetObjectItem(json, "rem_address")->valuestring);
+	ssh_options_set(rem_ssh_session, SSH_OPTIONS_LOG_VERBOSITY, &verbosity);
+	ssh_options_set(rem_ssh_session, SSH_OPTIONS_PORT, &port);
 
-	ssh_options_set(my_ssh_session, SSH_OPTIONS_HOST, "localhost");
-	ssh_options_set(my_ssh_session, SSH_OPTIONS_LOG_VERBOSITY, &verbosity);
-	ssh_options_set(my_ssh_session, SSH_OPTIONS_PORT, &port);
+	//ssh_pki_import_privkey_file(cJSON_GetObjectItem(json, "rem_ssh_key")->valuestring, NULL, NULL, NULL,priv_key);
 
-	rc = ssh_connect(my_ssh_session);
+	//
+  	rc = ssh_connect(rem_ssh_session);
   	if (rc != SSH_OK)
 	{
-		fprintf(stderr, "Error connecting to localhost: %s\n",
-	            ssh_get_error(my_ssh_session));
+		fprintf(stderr, "Error connecting to %s : %s\n", cJSON_GetObjectItem(json, "rem_address")->valuestring,
+			ssh_get_error(rem_ssh_session));
 		exit(EXIT_FAILURE);
 	}
 
-	ssh_disconnect(my_ssh_session);
-	ssh_free(my_ssh_session);
+	rc = ssh_userauth_privatekey_file(rem_ssh_session, cJSON_GetObjectItem(json, "rem_login")->valuestring, cJSON_GetObjectItem(json, "rem_ssh_key")->valuestring, NULL);
+	if (rc != SSH_AUTH_SUCCESS)
+	{
+		fprintf(stderr, "Error connecting to %s : %s\n", cJSON_GetObjectItem(json, "rem_address")->valuestring,
+			ssh_get_error(rem_ssh_session));
+		exit(EXIT_FAILURE);
+	}
+  //	rc = ssh_userauth_password(rem_ssh_session,"haad", "imation");
+
+
+	ssh_disconnect(rem_ssh_session);
+	ssh_free(rem_ssh_session);
 
 	return 0;
 }
@@ -119,16 +134,36 @@ main(int argc, char **argv)
 {
 	int ch;
 	char conf_path[MAXPATHLEN];
+	int cf_flag;
+	cJSON *root = cJSON_CreateObject();
 
 	(void)strncpy(conf_path, STUNEL_CONFIG, MAXPATHLEN-1);
 
 	/* Parse command line args */
-	while ((ch = getopt(argc, argv, "hf:")) != -1) {
+	/* TODO: Add options for port, destination ip, key and user so using conf file is not necessary*/
+	while ((ch = getopt(argc, argv, "hf:p:d:i:u:")) != -1) {
 		switch (ch) {
 			case 'f':
 				memset(conf_path, 0, MAXPATHLEN);
 				(void)strncpy(conf_path, optarg, MAXPATHLEN-1);
 				conf_path[MAXPATHLEN - 1]='\0';
+				cf_flag=1;
+				break;
+			case 'p':
+				cJSON_AddItemToObject(root, "rem_port",cJSON_CreateNumber(atoi(optarg)));
+				cf_flag=0;
+				break;
+			case 'd':
+				cJSON_AddItemToObject(root, "rem_address",cJSON_CreateString(optarg));
+				cf_flag=0;
+				break;
+			case 'i':
+				cJSON_AddItemToObject(root, "rem_ssh_key",cJSON_CreateString(optarg));
+				cf_flag=0;
+				break;
+			case 'u':
+				cJSON_AddItemToObject(root, "rem_login",cJSON_CreateString(optarg));
+				cf_flag=0;
 				break;
 			case '?':
 			case 'h':
@@ -139,9 +174,16 @@ main(int argc, char **argv)
 	argc -= optind;
 	argv += optind;
 
-	conf_json = get_conf_file(conf_path);
+	if ( cf_flag != 0) {
+		conf_json = get_conf_file(conf_path);
+	} else {
+		conf_json = root;
+	}
 
 	printf("Config file: \n%s\n", cJSON_Print(conf_json));
+
+	printf("User is set to %s, port to %d\n",  cJSON_GetObjectItem(conf_json, "rem_login")->valuestring,
+		cJSON_GetObjectItem(conf_json, "rem_port")->valueint);
 
 	printf("Connecting with libssh\n");
 	rem_ssh_connect(conf_json);
