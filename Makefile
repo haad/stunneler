@@ -19,8 +19,10 @@ endif
 CFLAGS=-I dist/cjson $(COPTS)
 LDFLAGS=  -lssh -lcurl
 
-stunneler: src/stunneler.o dist/cjson/cJSON.o
-	$(CC) -o stunneler src/stunneler.o dist/cjson/cJSON.o $(LDFLAGS)
+SOURCES:=$(wildcard src/*.c) $(wildcard dist/cjson/cJSON.c)
+
+stunneler: $(SOURCES)
+	$(CC) $(CFLAGS) -o $@ $(SOURCES) $(LDFLAGS)
 
 clean:
-	rm -rf src/*.o dist/cjson/*.o
+	rm -rf src/*.o dist/cjson/*.o stunneler
