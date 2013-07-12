@@ -19,19 +19,20 @@ clients must be made or how a client should react.
 #include <libssh/libssh.h>
 #include "stunneler.h"
 
-int verify_knownhost(ssh_session session){
+int verify_knownhost(ssh_session session) {
 	char *hexa;
 	int state;
 	char buf[10];
 	unsigned char *hash = NULL;
 	int hlen;
 
-	state=ssh_is_server_known(session);
+	state = ssh_is_server_known(session);
 
 	hlen = ssh_get_pubkey_hash(session, &hash);
 	if (hlen < 0) {
 		return -1;
 	}
+
 	switch(state){
 		case SSH_SERVER_KNOWN_OK:
 			break; /* ok */

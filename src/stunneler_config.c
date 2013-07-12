@@ -61,6 +61,7 @@ get_conf_file_size(char *path)
 
   close(fd);
 
+  printf("Config file size is %zd \n", (size_t)sb.st_size);
   return (size_t)sb.st_size;
 }
 
@@ -125,6 +126,13 @@ conf_get_sshkey(cJSON *json)
 }
 
 int
+conf_get_authtype(cJSON *json)
+{
+
+  return cJSON_GetObjectItem(json, "rem_authtype")->valueint;
+}
+
+int
 conf_get_log_level(cJSON *json)
 {
 
@@ -176,6 +184,18 @@ conf_set_log_level(cJSON *json, int level)
     cJSON_ReplaceItemInObject(json, "rem_log_level", cJSON_CreateNumber(level));
   }
 }
+
+void
+conf_set_authtype(cJSON *json, int auth_type)
+{
+
+  if (cJSON_GetObjectItem(json, "rem_authtype") == NULL ) {
+    cJSON_AddItemToObject(json, "rem_authtype", cJSON_CreateNumber(auth_type));
+  } else {
+    cJSON_ReplaceItemInObject(json, "rem_authtype", cJSON_CreateNumber(auth_type));
+  }
+}
+
 
 char *
 conf_dump(cJSON *json)

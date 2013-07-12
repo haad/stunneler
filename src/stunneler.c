@@ -45,6 +45,10 @@ static int rem_ssh_connect(cJSON *);
 static int rem_ssh_file_pubauth(cJSON *, ssh_session);
 static int rem_ssh_agent_pubauth(cJSON *, ssh_session);
 
+/*
+  * Auto Tunneler forwarding local ports to remote server.
+  */
+
 
 cJSON *conf_json;
 
@@ -54,6 +58,7 @@ usage(void)
 	printf("stunneler command to persitently call home and open tunnels to local port 22.\n");
 	printf("stunneler [-f conf_file], [-p port] [-u user] [-i private key] [-d dest ip] ");
 	printf("-D[for debug logging] -v [for verbose logging] -q [for quite (default)]\n");
+	printf("-A[Use SSH_AGENT for public keys]");
 	printf("If both -f and other options are specified at once -f is ignored.");
 	exit(EXIT_SUCCESS);
 }
@@ -72,6 +77,7 @@ rem_ssh_agent_pubauth(cJSON *json, ssh_session rem_ssh_session)
 		exit(EXIT_FAILURE);
 	}
 
+	printf("Succesfully connected to server %s\n", conf_get_address(json));
 	return 0;
 }
 
@@ -102,8 +108,8 @@ rem_ssh_file_pubauth(cJSON *json, ssh_session rem_ssh_session)
 	rc = ssh_pki_import_privkey_file(conf_get_sshkey(json), NULL, NULL, NULL, priv_key);
 	if (rc != SSH_OK)
 	{
-		fprintf(stderr, "Error ssh_pki_import_privkey_file to %s, error = %s, rc = %d\n", conf_get_sshkey(json),
-			ssh_get_error(rem_ssh_session), rc);
+		fprintf(stderr, "Error ssh_pki_import_privkey_file from %s, error = %d, rc = %d\n", conf_get_sshkey(json),
+			ssh_get_error_code(rem_ssh_session), rc);
 		exit(EXIT_FAILURE);
 	}
 
@@ -183,9 +189,10 @@ rem_ssh_connect(cJSON *json)
   	}
 
 	printf("Trying to connect to server\n");
-	//rem_ssh_agent_pubauth(json, rem_ssh_session);
-
-	rem_ssh_file_pubauth(json, rem_ssh_session);
+	if (conf_get_authtype(json) == STUNEL_AUTH_AGENT)
+		rem_ssh_agent_pubauth(json, rem_ssh_session);
+	else
+		rem_ssh_file_pubauth(json, rem_ssh_session);
 
 	banner=ssh_get_issue_banner(rem_ssh_session);
  	if(banner) {
@@ -206,7 +213,7 @@ main(int argc, char **argv)
 {
 	int ch;
 	char conf_path[MAXPATHLEN];
-	int cf_flag;
+	int conf=0;
 	cJSON *root = conf_create();
 
 	(void)strncpy(conf_path, STUNEL_CONFIG, MAXPATHLEN-1);
@@ -214,31 +221,35 @@ main(int argc, char **argv)
 	/* By default we set log level to NORMAL */
 	conf_set_log_level(root, STUNEL_NORMAL);
 
+	/* By default we use public key auth */
+	conf_set_authtype(root, STUNEL_AUTH_PUBLIC);
+
 	/* Parse command line args */
 	/* TODO: Add options for port, destination ip, key and user so using conf file is not necessary*/
-	while ((ch = getopt(argc, argv, "hqvDf:p:d:i:u:")) != -1) {
+	while ((ch = getopt(argc, argv, "hqvDAf:p:d:i:u:")) != -1) {
 		switch (ch) {
+			case 'A':
+				conf_set_authtype(root, STUNEL_AUTH_AGENT);
+				break;
 			case 'f':
-				memset(conf_path, 0, MAXPATHLEN);
-				(void)strncpy(conf_path, optarg, MAXPATHLEN-1);
-				conf_path[MAXPATHLEN - 1]='\0';
-				cf_flag=1;
+				if (argc == 1) {
+					memset(conf_path, 0, MAXPATHLEN);
+					(void)strncpy(conf_path, optarg, MAXPATHLEN-1);
+					conf_path[MAXPATHLEN - 1]='\0';
+					conf=1;
+				}
 				break;
 			case 'p':
 				conf_set_port(root, atoi(optarg));
-				cf_flag=0;
 				break;
 			case 'd':
 				conf_set_address(root, optarg);
-				cf_flag=0;
 				break;
 			case 'i':
 				conf_set_sshkey(root, optarg);
-				cf_flag=0;
 				break;
 			case 'u':
 				conf_set_login(root, optarg);
-				cf_flag=0;
 				break;
 			case 'q':
 				conf_set_log_level(root, STUNEL_NORMAL);
@@ -258,7 +269,8 @@ main(int argc, char **argv)
 	argc -= optind;
 	argv += optind;
 
-	if ( cf_flag != 0) {
+	if ( conf ) {
+		printf("Reading configuration from file: %s\n", conf_path);
 		conf_json = get_conf_file(conf_path);
 	} else {
 		conf_json = root;
