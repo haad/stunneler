@@ -108,42 +108,42 @@ char *
 conf_get_login(cJSON *json)
 {
 
-  return cJSON_GetObjectItem(json, "rem_login")->valuestring;
+  return cJSON_GetItemString(json, "rem_login");
 }
 
 char *
 conf_get_address(cJSON *json)
 {
 
-  return cJSON_GetObjectItem(json, "rem_address")->valuestring;
+  return cJSON_GetItemString(json, "rem_address");
 }
 
 char *
 conf_get_sshkey(cJSON *json)
 {
 
-  return cJSON_GetObjectItem(json, "rem_ssh_key")->valuestring;
+  return cJSON_GetItemString(json, "rem_ssh_key");
 }
 
 int
 conf_get_authtype(cJSON *json)
 {
 
-  return cJSON_GetObjectItem(json, "rem_authtype")->valueint;
+  return cJSON_GetItemNumber(json, "rem_authtype");
 }
 
 int
 conf_get_log_level(cJSON *json)
 {
 
-  return cJSON_GetObjectItem(json, "rem_log_level")->valueint;
+  return cJSON_GetItemNumber(json, "rem_log_level");
 }
 
 int
 conf_get_port(cJSON *json)
 {
 
-  return cJSON_GetObjectItem(json, "rem_port")->valueint;
+  return cJSON_GetItemNumber(json, "rem_port");
 }
 
 void
