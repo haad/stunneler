@@ -21,3 +21,6 @@ src/*.o
 *.exe
 *.out
 *.app
+*.dSYM
+
+*.sublime*
