@@ -232,7 +232,7 @@ main(int argc, char **argv)
 				conf_set_authtype(root, STUNEL_AUTH_AGENT);
 				break;
 			case 'f':
-				if (argc == 1) {
+				if (argc == 3) {
 					memset(conf_path, 0, MAXPATHLEN);
 					(void)strncpy(conf_path, optarg, MAXPATHLEN-1);
 					conf_path[MAXPATHLEN - 1]='\0';
