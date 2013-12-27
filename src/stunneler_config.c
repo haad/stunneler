@@ -125,6 +125,13 @@ conf_get_sshkey(cJSON *json)
   return cJSON_GetItemString(json, "rem_ssh_key");
 }
 
+char *
+conf_get_ssh_hostkey(cJSON *json)
+{
+
+  return cJSON_GetItemString(json, "rem_ssh_hostkey");
+}
+
 int
 conf_get_authtype(cJSON *json)
 {
@@ -165,6 +172,13 @@ conf_set_sshkey(cJSON *json, char *sshkey)
 {
 
   cJSON_AddItemToObject(json, "rem_ssh_key", cJSON_CreateString(sshkey));
+}
+
+void
+conf_set_ssh_hostkey(cJSON *json, char *hostkey)
+{
+
+  cJSON_AddItemToObject(json, "rem_ssh_hostkey", cJSON_CreateString(hostkey));
 }
 
 void

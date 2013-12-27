@@ -169,6 +169,7 @@ rem_ssh_connect(cJSON *json)
 	ssh_options_set(rem_ssh_session, SSH_OPTIONS_HOST, conf_get_address(json));
 	ssh_options_set(rem_ssh_session, SSH_OPTIONS_LOG_VERBOSITY, &verbosity);
 	ssh_options_set(rem_ssh_session, SSH_OPTIONS_PORT, &port);
+	ssh_options_set(rem_ssh_session, SSH_OPTIONS_HOSTKEYS, conf_get_ssh_hostkey(json));
 
 	if(ssh_connect(rem_ssh_session) != SSH_OK) {
 		fprintf(stderr, "Error connecting to %s : %s\n", conf_get_address(json), ssh_get_error(rem_ssh_session));
@@ -224,6 +225,8 @@ main(int argc, char **argv)
 	/* By default we use public key auth */
 	conf_set_authtype(root, STUNEL_AUTH_PUBLIC);
 
+	conf_set_ssh_hostkey(root, "ssh-rsa,ssh-dsa");
+
 	/* Parse command line args */
 	/* TODO: Add options for port, destination ip, key and user so using conf file is not necessary*/
 	while ((ch = getopt(argc, argv, "hqvDAf:p:d:i:u:")) != -1) {
@@ -274,6 +277,13 @@ main(int argc, char **argv)
 		conf_json = get_conf_file(conf_path);
 	} else {
 		conf_json = root;
+	}
+
+	if ( conf_get_login(conf_json) == NULL ||
+		conf_get_port(conf_json) == -1 ||
+		conf_get_address(conf_json) ==NULL ) {
+		printf("Not enough data to connect to a server. Exiting !! \n");
+		exit(1);
 	}
 
 	printf("Config file: \n%s\n", conf_dump(conf_json));
