@@ -22,5 +22,5 @@ src/*.o
 *.out
 *.app
 *.dSYM
-
+stunneler
 *.sublime*
