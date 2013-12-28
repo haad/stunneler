@@ -98,10 +98,31 @@ get_conf_file(char *conf_path)
 }
 
 cJSON *
-conf_create(void)
+conf_create_with_defaults(void)
 {
+  cJSON *root;
 
-  return cJSON_CreateObject();
+  root = cJSON_CreateObject();
+
+  if (root == NULL) {
+    printf("Can't create new conf root\n.");
+    return NULL;
+  }
+
+  /* By default we set log level to NORMAL */
+  conf_set_log_level(root, STUNEL_NORMAL);
+
+  /* By default we use public key auth */
+  conf_set_authtype(root, STUNEL_AUTH_PUBLIC);
+
+  /* Set default hostkey algorithms */
+  conf_set_ssh_hostkey(root, STUNEL_HOSTKEY_ALG);
+
+  /* set compression algorithm and level */
+  conf_set_compression(root, STUNEL_COMP_ALG);
+  conf_set_compression(root, STUNEL_COMP_LVL);
+
+  return root;
 }
 
 char *
@@ -130,6 +151,20 @@ conf_get_ssh_hostkey(cJSON *json)
 {
 
   return cJSON_GetItemString(json, "rem_ssh_hostkey");
+}
+
+char *
+conf_get_compression(cJSON *json)
+{
+
+  return cJSON_GetItemString(json, "rem_ssh_compression");
+}
+
+int
+conf_get_compression_level(cJSON *json)
+{
+
+  return cJSON_GetItemNumber(json, "rem_ssh_compression_level");
 }
 
 int
@@ -179,6 +214,20 @@ conf_set_ssh_hostkey(cJSON *json, char *hostkey)
 {
 
   cJSON_AddItemToObject(json, "rem_ssh_hostkey", cJSON_CreateString(hostkey));
+}
+
+void
+conf_set_compression(cJSON *json, char *comp)
+{
+
+  cJSON_AddItemToObject(json, "rem_ssh_compression", cJSON_CreateString(comp));
+}
+
+void
+conf_set_compression_level(cJSON *json, int comp_level)
+{
+
+  cJSON_AddItemToObject(json, "rem_ssh_compression_level", cJSON_CreateNumber(comp_level));
 }
 
 void

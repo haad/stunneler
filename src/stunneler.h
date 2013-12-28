@@ -14,9 +14,14 @@
 #define STUNEL_AUTH_PUBLIC 1
 #define STUNEL_AUTH_AGENT 2
 
+#define STUNEL_HOSTKEY_ALG "ssh-rsa,ssh-dsa,ecdsa-sha2-nistp256"
+
+#define STUNEL_COMP_ALG "zlib@openssh.com"
+#define STUNEL_COMP_LVL "1"
+
 /* stunneler_config.c */
 cJSON * get_conf_file(char *);
-cJSON * conf_create(void);
+cJSON * conf_create_with_defaults(void);
 
 char * conf_dump(cJSON *);
 
@@ -24,6 +29,8 @@ char * conf_get_login(cJSON *);
 char * conf_get_address(cJSON *);
 char * conf_get_sshkey(cJSON *);
 char * conf_get_ssh_hostkey(cJSON *);
+char * conf_get_compression(cJSON *);
+int conf_get_compression_level(cJSON *);
 int conf_get_log_level(cJSON *);
 int conf_get_port(cJSON *);
 int conf_get_authtype(cJSON *);
@@ -32,6 +39,8 @@ void conf_set_login(cJSON *, char *);
 void conf_set_address(cJSON *, char *);
 void conf_set_sshkey(cJSON *, char *);
 void conf_set_ssh_hostkey(cJSON *, char *);
+void conf_set_compression(cJSON *, char *);
+void conf_set_compression_level(cJSON *, int);
 void conf_set_log_level(cJSON *, int);
 void conf_set_port(cJSON *, int);
 void conf_set_authtype(cJSON *, int);
