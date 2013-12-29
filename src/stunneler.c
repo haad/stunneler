@@ -41,16 +41,10 @@
 #include "stunneler.h"
 
 static void usage(void);
-static int rem_ssh_connect(cJSON *);
-static int rem_ssh_file_pubauth(cJSON *, ssh_session);
-static int rem_ssh_agent_pubauth(cJSON *, ssh_session);
 
 /*
   * Auto Tunneler forwarding local ports to remote server.
   */
-
-
-cJSON *conf_json;
 
 static void
 usage(void)
@@ -63,179 +57,17 @@ usage(void)
 	exit(EXIT_SUCCESS);
 }
 
-static int
-rem_ssh_agent_pubauth(cJSON *json, ssh_session rem_ssh_session)
-{
-	int rc;
-
-	//rc = ssh_userauth_password(rem_ssh_session, NULL, "imation");
-
-	rc = ssh_userauth_autopubkey(rem_ssh_session, NULL);
-	if (rc != SSH_AUTH_SUCCESS)
-	{
-		fprintf(stderr, "Error userauth_privatekey_file to %s : %s, rc = %d\n", conf_get_address(json), ssh_get_error(rem_ssh_session), rc);
-		exit(EXIT_FAILURE);
-	}
-
-	printf("Succesfully connected to server %s\n", conf_get_address(json));
-	return 0;
-}
-
-/*
-  * This routine tries to authenticate against server with public key.
-  *
-  * Auth works like this:
-  *
-  * 1) Import private key --> ssh_pki_import_privkey_file
-  * 2) Export public key from private key --> ssh_pki_export_privkey_to_pubkey
-  * 3) Offer public key to server --> ssh_userauth_try_publickey
-  * 4) If offer is successful try to actually authenticate against server. --> ssh_userauth_publickey
-  * 5) Free keys --> ssh_key_freee
-  *
-  * For more info see: http://api.libssh.org/master/libssh_tutor_authentication.html
-  */
-
-static int
-rem_ssh_file_pubauth(cJSON *json, ssh_session rem_ssh_session)
-{
-	ssh_key *priv_key;
-	ssh_key *pub_key;
-	int rc;
-
-	priv_key = NULL;
-	pub_key = NULL;
-
-	rc = ssh_pki_import_privkey_file(conf_get_sshkey(json), NULL, NULL, NULL, priv_key);
-	if (rc != SSH_OK)
-	{
-		fprintf(stderr, "Error ssh_pki_import_privkey_file from %s, error = %d, rc = %d\n", conf_get_sshkey(json),
-			ssh_get_error_code(rem_ssh_session), rc);
-		exit(EXIT_FAILURE);
-	}
-
-	rc = ssh_pki_export_privkey_to_pubkey(*priv_key, pub_key);
-	if (rc != SSH_OK)
-	{
-		fprintf(stderr, "Error ssh_pki_export_privkey_to_pubkey to %s, error = %s, rc = %d\n", conf_get_sshkey(json),
-			ssh_get_error(rem_ssh_session), rc);
-
-		ssh_key_free(*priv_key);
-		exit(EXIT_FAILURE);
-	}
-
-	rc = ssh_userauth_try_publickey(rem_ssh_session, NULL, *pub_key);
-	if (rc != SSH_AUTH_SUCCESS)
-	{
-		fprintf(stderr, "Error ssh_userauth_try_publickey to %s, error = %s, rc = %d\n", conf_get_sshkey(json),
-			ssh_get_error(rem_ssh_session), rc);
-
-		ssh_key_free(*priv_key);
-		ssh_key_free(*pub_key);
-		exit(EXIT_FAILURE);
-	}
-
-	/* Try to authenticate with keys. */
-	rc = ssh_userauth_publickey(rem_ssh_session, NULL, *priv_key);
-	if (rc != SSH_AUTH_SUCCESS)
-	{
-		fprintf(stderr, "Error ssh_userauth_publickey to %s : %s, rc = %d\n", conf_get_address(json), ssh_get_error(rem_ssh_session), rc);
-		exit(EXIT_FAILURE);
-	}
-
-	if (priv_key)
-		ssh_key_free(*priv_key);
-
-	if (pub_key)
-		ssh_key_free(*pub_key);
-
-	return 0;
-}
-
-static int
-rem_ssh_connect(cJSON *json)
-{
-	ssh_session rem_ssh_session;
-	ssh_channel channel;
-	int verbosity = conf_get_log_level(json);
-	int port, comp_level;
-	int nbytes;
-	char *banner;
-	char buffer[256];
-
-	if ((rem_ssh_session  = ssh_new()) == NULL) {
-		fprintf(stderr, "Creating new ssh_session failed.\n");
-		exit(EXIT_FAILURE);
-	}
-
-	port = conf_get_port(json);
-	comp_level = conf_get_compression_level(json);
-
-	ssh_options_set(rem_ssh_session, SSH_OPTIONS_USER, conf_get_login(json));
-	ssh_options_set(rem_ssh_session, SSH_OPTIONS_HOST, conf_get_address(json));
-	ssh_options_set(rem_ssh_session, SSH_OPTIONS_LOG_VERBOSITY, &verbosity);
-	ssh_options_set(rem_ssh_session, SSH_OPTIONS_PORT, &port);
-	ssh_options_set(rem_ssh_session, SSH_OPTIONS_HOSTKEYS, conf_get_ssh_hostkey(json));
-	ssh_options_set(rem_ssh_session, SSH_OPTIONS_COMPRESSION, conf_get_compression(json));
-	ssh_options_set(rem_ssh_session, SSH_OPTIONS_COMPRESSION_LEVEL, &comp_level);
-
-
-	if(ssh_connect(rem_ssh_session) != SSH_OK) {
-		fprintf(stderr, "Error connecting to %s : %s\n", conf_get_address(json), ssh_get_error(rem_ssh_session));
-		exit(EXIT_FAILURE);
-	}
-
-  	/*rc = ssh_connect(rem_ssh_session);
-  	if (rc != SSH_OK)
-	{
-		fprintf(stderr, "Error connecting to %s : %s\n", conf_get_address(json), ssh_get_error(rem_ssh_session));
-		exit(EXIT_FAILURE);
-	}*/
-
-	printf("Trying to verify server RSA key in knownhosts file.\n");
-	if( verify_knownhost(rem_ssh_session) < 0 ){
- 		ssh_disconnect(rem_ssh_session);
-		return 0;
-  	}
-
-	printf("Trying to connect to server\n");
-	if (conf_get_authtype(json) == STUNEL_AUTH_AGENT)
-		rem_ssh_agent_pubauth(json, rem_ssh_session);
-	else
-		rem_ssh_file_pubauth(json, rem_ssh_session);
-
-	banner=ssh_get_issue_banner(rem_ssh_session);
- 	if(banner) {
-		printf("%s\n",banner);
-		free(banner);
-	}
-
-	channel = ssh_channel_new(rem_ssh_session);
-	ssh_channel_open_session(channel);
-	ssh_channel_request_exec(channel, "ls -la");
-
-	nbytes = ssh_channel_read(channel, buffer, sizeof(buffer), 0);
-	while (nbytes > 0) {
-		if (fwrite(buffer, 1, nbytes, stdout) != (unsigned int) nbytes) {
-			printf("ASDASDASD\n");
-		}
-        	nbytes = ssh_channel_read(channel, buffer, sizeof(buffer), 0);
-      }
-
-	if(ssh_is_connected(rem_ssh_session))
-		ssh_disconnect(rem_ssh_session);
-
-	ssh_free(rem_ssh_session);
-
-	return 0;
-}
-
 int
 main(int argc, char **argv)
 {
 	int ch;
 	char conf_path[MAXPATHLEN];
 	int conf=0;
-	cJSON *root = conf_create_with_defaults();
+	st_cn_t conn;
+
+	conn = st_connection_alloc();
+
+	conn->st_config = conf_create_with_defaults();
 
 	(void)strncpy(conf_path, STUNEL_CONFIG, MAXPATHLEN-1);
 
@@ -244,7 +76,7 @@ main(int argc, char **argv)
 	while ((ch = getopt(argc, argv, "hqvDAf:p:d:i:u:")) != -1) {
 		switch (ch) {
 			case 'A':
-				conf_set_authtype(root, STUNEL_AUTH_AGENT);
+				conf_set_authtype(conn->st_config, STUNEL_AUTH_AGENT);
 				break;
 			case 'f':
 				if (argc == 3) {
@@ -255,25 +87,25 @@ main(int argc, char **argv)
 				}
 				break;
 			case 'p':
-				conf_set_port(root, atoi(optarg));
+				conf_set_port(conn->st_config, atoi(optarg));
 				break;
 			case 'd':
-				conf_set_address(root, optarg);
+				conf_set_address(conn->st_config, optarg);
 				break;
 			case 'i':
-				conf_set_sshkey(root, optarg);
+				conf_set_sshkey(conn->st_config, optarg);
 				break;
 			case 'u':
-				conf_set_login(root, optarg);
+				conf_set_login(conn->st_config, optarg);
 				break;
 			case 'q':
-				conf_set_log_level(root, STUNEL_NORMAL);
+				conf_set_log_level(conn->st_config, STUNEL_NORMAL);
 				break;
 			case 'v':
-				conf_set_log_level(root, STUNEL_VERBOSE);
+				conf_set_log_level(conn->st_config, STUNEL_VERBOSE);
 				break;
 			case 'D':
-				conf_set_log_level(root, STUNEL_DEBUG);
+				conf_set_log_level(conn->st_config, STUNEL_DEBUG);
 				break;
 			case '?':
 			case 'h':
@@ -286,25 +118,22 @@ main(int argc, char **argv)
 
 	if ( conf ) {
 		printf("Reading configuration from file: %s\n", conf_path);
-		conf_json = get_conf_file(conf_path);
-	} else {
-		conf_json = root;
+		conf_destroy(conn->st_config);
+		conn->st_config = conf_get_file(conf_path);
 	}
+	printf("Config file: \n%s\n", conf_dump(conn->st_config));
 
-	printf("Config file: \n%s\n", conf_dump(conf_json));
-
-	if ( conf_get_login(conf_json) == NULL ||
-		conf_get_port(conf_json) == -1 ||
-		conf_get_address(conf_json) ==NULL ) {
-		printf("Not enough data to connect to a server. Exiting !! \n");
+	if (conf_check(conn->st_config)) {
+		st_connection_destroy(conn);
 		exit(1);
 	}
 
-	printf("User is set to %s, port to %d\n",  conf_get_login(conf_json),
-		conf_get_port(conf_json));
+	printf("User is set to %s, port to %d\n",  conf_get_login(conn->st_config),
+		conf_get_port(conn->st_config));
 
 	printf("Connecting with libssh\n");
-	rem_ssh_connect(conf_json);
+	st_ssh_connect(conn);
 
+	st_connection_destroy(conn);
 	return 0;
 }

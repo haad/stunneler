@@ -65,8 +65,8 @@ get_conf_file_size(char *path)
   return (size_t)sb.st_size;
 }
 
-cJSON *
-get_conf_file(char *conf_path)
+st_config_t
+conf_get_file(char *conf_path)
 {
   FILE *conf_f;
   cJSON *json;
@@ -94,10 +94,10 @@ get_conf_file(char *conf_path)
   free(mmap_file);
   fclose(conf_f);
 
-  return json;
+  return (st_config_t )json;
 }
 
-cJSON *
+st_config_t
 conf_create_with_defaults(void)
 {
   cJSON *root;
@@ -122,123 +122,123 @@ conf_create_with_defaults(void)
   conf_set_compression(root, STUNEL_COMP_ALG);
   conf_set_compression(root, STUNEL_COMP_LVL);
 
-  return root;
+  return (st_config_t )root;
 }
 
 char *
-conf_get_login(cJSON *json)
+conf_get_login(st_config_t json)
 {
 
   return cJSON_GetItemString(json, "rem_login");
 }
 
 char *
-conf_get_address(cJSON *json)
+conf_get_address(st_config_t json)
 {
 
   return cJSON_GetItemString(json, "rem_address");
 }
 
 char *
-conf_get_sshkey(cJSON *json)
+conf_get_sshkey(st_config_t json)
 {
 
   return cJSON_GetItemString(json, "rem_ssh_key");
 }
 
 char *
-conf_get_ssh_hostkey(cJSON *json)
+conf_get_ssh_hostkey(st_config_t json)
 {
 
   return cJSON_GetItemString(json, "rem_ssh_hostkey");
 }
 
 char *
-conf_get_compression(cJSON *json)
+conf_get_compression(st_config_t json)
 {
 
   return cJSON_GetItemString(json, "rem_ssh_compression");
 }
 
 int
-conf_get_compression_level(cJSON *json)
+conf_get_compression_level(st_config_t json)
 {
 
   return cJSON_GetItemNumber(json, "rem_ssh_compression_level");
 }
 
 int
-conf_get_authtype(cJSON *json)
+conf_get_authtype(st_config_t json)
 {
 
   return cJSON_GetItemNumber(json, "rem_authtype");
 }
 
 int
-conf_get_log_level(cJSON *json)
+conf_get_log_level(st_config_t json)
 {
 
   return cJSON_GetItemNumber(json, "rem_log_level");
 }
 
 int
-conf_get_port(cJSON *json)
+conf_get_port(st_config_t json)
 {
 
   return cJSON_GetItemNumber(json, "rem_port");
 }
 
 void
-conf_set_login(cJSON *json, char *login)
+conf_set_login(st_config_t json, char *login)
 {
 
   cJSON_AddItemToObject(json, "rem_login", cJSON_CreateString(login));
 }
 
 void
-conf_set_address(cJSON *json, char *address)
+conf_set_address(st_config_t json, char *address)
 {
 
   cJSON_AddItemToObject(json, "rem_address", cJSON_CreateString(address));
 }
 
 void
-conf_set_sshkey(cJSON *json, char *sshkey)
+conf_set_sshkey(st_config_t json, char *sshkey)
 {
 
   cJSON_AddItemToObject(json, "rem_ssh_key", cJSON_CreateString(sshkey));
 }
 
 void
-conf_set_ssh_hostkey(cJSON *json, char *hostkey)
+conf_set_ssh_hostkey(st_config_t json, char *hostkey)
 {
 
   cJSON_AddItemToObject(json, "rem_ssh_hostkey", cJSON_CreateString(hostkey));
 }
 
 void
-conf_set_compression(cJSON *json, char *comp)
+conf_set_compression(st_config_t json, char *comp)
 {
 
   cJSON_AddItemToObject(json, "rem_ssh_compression", cJSON_CreateString(comp));
 }
 
 void
-conf_set_compression_level(cJSON *json, int comp_level)
+conf_set_compression_level(st_config_t json, int comp_level)
 {
 
   cJSON_AddItemToObject(json, "rem_ssh_compression_level", cJSON_CreateNumber(comp_level));
 }
 
 void
-conf_set_port(cJSON *json, int port)
+conf_set_port(st_config_t json, int port)
 {
 
    cJSON_AddItemToObject(json, "rem_port", cJSON_CreateNumber(port));
 }
 
 void
-conf_set_log_level(cJSON *json, int level)
+conf_set_log_level(st_config_t json, int level)
 {
 
   if (cJSON_GetObjectItem(json, "rem_log_level") == NULL ) {
@@ -249,7 +249,7 @@ conf_set_log_level(cJSON *json, int level)
 }
 
 void
-conf_set_authtype(cJSON *json, int auth_type)
+conf_set_authtype(st_config_t json, int auth_type)
 {
 
   if (cJSON_GetObjectItem(json, "rem_authtype") == NULL ) {
@@ -259,10 +259,31 @@ conf_set_authtype(cJSON *json, int auth_type)
   }
 }
 
-
 char *
-conf_dump(cJSON *json)
+conf_dump(st_config_t json)
 {
 
   return cJSON_Print(json);
+}
+
+void
+conf_destroy(st_config_t json)
+{
+
+  cJSON_Delete(json);
+}
+
+/* Check config file if we have enough data to connect to server.*/
+int
+conf_check(st_config_t json)
+{
+
+  if ( conf_get_login(json) == NULL ||
+    conf_get_port(json) == -1 ||
+    conf_get_address(json) ==NULL ) {
+    printf("Not enough data to connect to a server. Exiting !! \n");
+    return 1;
+  }
+
+  return 0;
 }

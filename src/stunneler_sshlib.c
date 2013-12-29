@@ -19,7 +19,8 @@ clients must be made or how a client should react.
 #include <libssh/libssh.h>
 #include "stunneler.h"
 
-int verify_knownhost(ssh_session session) {
+int
+verify_knownhost(ssh_session session) {
 	char *hexa;
 	int state;
 	char buf[10];
