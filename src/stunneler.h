@@ -25,14 +25,15 @@ typedef cJSON * st_config_t;
 struct stunel_ssh_opts {
   ssh_session st_session;
   ssh_channel st_channel;
-  ssh_key *st_priv_key;
-  ssh_key *st_pub_key;
+  ssh_key st_priv_key;
+  ssh_key st_pub_key;
 };
 typedef struct stunel_ssh_opts * stunel_ssh_opts_t;
 
 struct stunel_connection {
   st_config_t st_config;
   stunel_ssh_opts_t st_ssh_opts;
+  int (*st_ssh_auth_fn) (st_config_t, ssh_session);
 };
 typedef struct stunel_connection * st_cn_t;
 
@@ -50,6 +51,7 @@ char * conf_dump(st_config_t);
 void conf_destroy(st_config_t);
 
 char * conf_get_login(st_config_t);
+char * conf_get_pass(st_config_t);
 char * conf_get_address(st_config_t);
 char * conf_get_sshkey(st_config_t);
 char * conf_get_ssh_hostkey(st_config_t);

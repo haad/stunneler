@@ -45,6 +45,9 @@ static int st_ssh_file_pubauth(st_config_t, ssh_session);
 static int st_ssh_agent_pubauth(st_config_t, ssh_session);
 static void st_setup_connection(st_cn_t);
 
+/*
+  * Allocate new connection.
+  */
 st_cn_t
 st_connection_alloc()
 {
@@ -65,6 +68,9 @@ st_connection_alloc()
 	return conn;
 }
 
+/*
+  * Destroys connection.
+  */
 void
 st_connection_destroy(st_cn_t conn)
 {
@@ -73,6 +79,12 @@ st_connection_destroy(st_cn_t conn)
 		ssh_channel_close(conn->st_ssh_channel);
 
 	ssh_channel_free(conn->st_ssh_channel);
+
+	if (conn->st_ssh_priv_key)
+		ssh_key_free(conn->st_ssh_priv_key);
+
+	if (conn->st_ssh_pub_key)
+		ssh_key_free(conn->st_ssh_pub_key);
 
 	if (ssh_is_connected(conn->st_ssh_session))
 		ssh_disconnect(conn->st_ssh_session);
@@ -83,37 +95,39 @@ st_connection_destroy(st_cn_t conn)
 	free(conn);
 }
 
+/*
+  * This is public key ssh-agent authentication routine.
+  */
 static int
 st_ssh_agent_pubauth(st_config_t conf, ssh_session session)
 {
 	int rc;
 
-	//rc = ssh_userauth_password(session, NULL, "imation");
-
 	rc = ssh_userauth_autopubkey(session, NULL);
 	if (rc != SSH_AUTH_SUCCESS)
 	{
-		fprintf(stderr, "Error userauth_privatekey_file to %s : %s, rc = %d\n", conf_get_address(conf), ssh_get_error(session), rc);
-		exit(EXIT_FAILURE);
+		fprintf(stderr, "Error ssh_userauth_autopubkey to %s : %s, rc = %d\n", conf_get_address(conf),
+		 ssh_get_error(session), rc);
+		return rc;
 	}
 
 	printf("Succesfully connected to server %s\n", conf_get_address(conf));
-	return 0;
+	return rc;
 }
 
 /*
-	* This routine tries to authenticate against server with public key.
-	*
-	* Auth works like this:
-	*
-	* 1) Import private key --> ssh_pki_import_privkey_file
-	* 2) Export public key from private key --> ssh_pki_export_privkey_to_pubkey
-	* 3) Offer public key to server --> ssh_userauth_try_publickey
-	* 4) If offer is successful try to actually authenticate against server. --> ssh_userauth_publickey
-	* 5) Free keys --> ssh_key_freee
-	*
-	* For more info see: http://api.libssh.org/master/libssh_tutor_authentication.html
-	*/
+  * This routine tries to authenticate against server with public key.
+  *
+  * Auth works like this:
+  *
+  * 1) Import private key --> ssh_pki_import_privkey_file
+  * 2) Export public key from private key --> ssh_pki_export_privkey_to_pubkey
+  * 3) Offer public key to server --> ssh_userauth_try_publickey
+  * 4) If offer is successful try to actually authenticate against server. --> ssh_userauth_publickey
+  * 5) Free keys --> ssh_key_freee
+  *
+  * For more info see: http://api.libssh.org/master/libssh_tutor_authentication.html
+  */
 static int
 st_ssh_file_pubauth(st_config_t conf, ssh_session session)
 {
@@ -124,87 +138,93 @@ st_ssh_file_pubauth(st_config_t conf, ssh_session session)
 	priv_key = ssh_key_new();
 	pub_key = ssh_key_new();
 
+	/* First import private key from file */
 	rc = ssh_pki_import_privkey_file(conf_get_sshkey(conf), NULL, NULL, NULL, &priv_key);
-	if (rc != SSH_OK)
-	{
+	if (rc != SSH_OK) {
 		fprintf(stderr, "Error ssh_pki_import_privkey_file from %s, error = %d, rc = %d\n", conf_get_sshkey(conf),
 			ssh_get_error_code(session), rc);
-		exit(EXIT_FAILURE);
+		goto error;
 	}
 
+	/* Export public key from private key */
 	rc = ssh_pki_export_privkey_to_pubkey(priv_key, &pub_key);
-	if (rc != SSH_OK)
-	{
+	if (rc != SSH_OK) {
 		fprintf(stderr, "Error ssh_pki_export_privkey_to_pubkey to %s, error = %s, rc = %d\n", conf_get_sshkey(conf),
 			ssh_get_error(session), rc);
-
-		ssh_key_free(priv_key);
-		exit(EXIT_FAILURE);
-	}
-
-	rc = ssh_userauth_try_publickey(session, NULL, pub_key);
-	if (rc != SSH_AUTH_SUCCESS)
-	{
-		fprintf(stderr, "Error ssh_userauth_try_publickey to %s, error = %s, rc = %d\n", conf_get_sshkey(conf),
-			ssh_get_error(session), rc);
-
-		ssh_key_free(priv_key);
-		ssh_key_free(pub_key);
-		exit(EXIT_FAILURE);
+		goto error;
 	}
 
 	/* Try to authenticate with keys. */
 	rc = ssh_userauth_publickey(session, NULL, priv_key);
-	if (rc != SSH_AUTH_SUCCESS)
-	{
-		fprintf(stderr, "Error ssh_userauth_publickey to %s : %s, rc = %d\n", conf_get_address(conf), ssh_get_error(session), rc);
-		exit(EXIT_FAILURE);
+	if (rc != SSH_AUTH_SUCCESS) {
+		fprintf(stderr, "Error ssh_userauth_publickey to %s : %s, rc = %d\n", conf_get_address(conf),
+			ssh_get_error(session), rc);
+		goto error;
 	}
 
+error:
 	if (priv_key)
 		ssh_key_free(priv_key);
 
 	if (pub_key)
 		ssh_key_free(pub_key);
 
-	return 0;
+	return rc;
 }
 
+/*
+ * Authenticate against server with password.
+ *
+ * TODO: This doesn't work on SSHv2 servers they need ssh_userauth_kbdint.
+ */
 static int
 st_ssh_pass_auth(st_config_t conf, ssh_session session) {
 	int rc;
 
-	rc = ssh_userauth_password(session, NULL, "imation");
+	rc = ssh_userauth_password(session, NULL, conf_get_pass(conf));
 	if (rc != SSH_AUTH_SUCCESS)
 	{
-		fprintf(stderr, "Error userauth_privatekey_file to %s : %s, rc = %d\n", conf_get_address(conf), ssh_get_error(session), rc);
-		exit(EXIT_FAILURE);
+		fprintf(stderr, "Error ssh_userauth_password to %s : %s, rc = %d, pass = %s\n", conf_get_address(conf),
+			ssh_get_error(session), rc, conf_get_pass(conf));
+		return rc;
 	}
 
 	printf("Succesfully connected to server %s\n", conf_get_address(conf));
-	return 0;
+	return rc;
 }
 
 static int
 st_auth_connection(st_cn_t conn)
 {
+	int rc;
 	st_config_t conf = conn->st_config;
 
 	switch(conf_get_authtype(conf)) {
 		case STUNEL_AUTH_AGENT:
-			st_ssh_agent_pubauth(conf, conn->st_ssh_session);
+			conn->st_ssh_auth_fn=&st_ssh_agent_pubauth;
 			break;
 		case STUNEL_AUTH_PUBLIC:
-			st_ssh_file_pubauth(conf, conn->st_ssh_session);
+			conn->st_ssh_auth_fn=&st_ssh_file_pubauth;
 			break;
 		case STUNEL_AUTH_PASSW:
-			st_ssh_pass_auth(conf, conn->st_ssh_session);
+			conn->st_ssh_auth_fn=&st_ssh_pass_auth;
 			break;
 		default:
+			printf("Unknokwn AUTHTYPE = %d\n", conf_get_authtype(conf));
+			rc = SSH_AUTH_ERROR;
 			break;
 	}
 
-	return 0;
+	if (conn->st_ssh_auth_fn)
+		rc = conn->st_ssh_auth_fn(conf, conn->st_ssh_session);
+
+	if (rc != SSH_AUTH_SUCCESS) {
+		printf("Authentication against server failed with exit code %d\n", rc);
+		st_connection_destroy(conn);
+		exit(1);
+	}
+
+	return rc;
 }
 
 static void
@@ -216,6 +236,7 @@ st_setup_connection(st_cn_t conn)
 
 	if ((conn->st_ssh_session  = ssh_new()) == NULL) {
 		fprintf(stderr, "Creating new ssh_session failed.\n");
+		st_connection_destroy(conn);
 		exit(EXIT_FAILURE);
 	}
 
@@ -237,18 +258,19 @@ st_ssh_connect(st_cn_t conn)
 {
 	st_config_t conf = conn->st_config;
 	int nbytes;
-	char *banner;
 	char buffer[256];
 
 	st_setup_connection(conn);
 
-	if(ssh_connect(conn->st_ssh_session) != SSH_OK) {
-		fprintf(stderr, "Error connecting to %s : %s\n", conf_get_address(conf), ssh_get_error(conn->st_ssh_session));
+	if (ssh_connect(conn->st_ssh_session) != SSH_OK) {
+		fprintf(stderr, "Error connecting to %s : %s\n", conf_get_address(conf),
+			ssh_get_error(conn->st_ssh_session));
+		st_connection_destroy(conn);
 		exit(EXIT_FAILURE);
 	}
 
 	printf("Trying to verify server RSA key in knownhosts file.\n");
-	if(verify_knownhost(conn->st_ssh_session) < 0) {
+	if (verify_knownhost(conn->st_ssh_session) < 0) {
 		st_connection_destroy(conn);
 		return -1;
 	}
@@ -256,12 +278,6 @@ st_ssh_connect(st_cn_t conn)
 	/* Try to authenticate agains server with choosen method */
 	printf("Trying to connect to server\n");
 	st_auth_connection(conn);
-
-	banner=ssh_get_issue_banner(conn->st_ssh_session);
-	if (banner) {
-		printf("%s\n", banner);
-		free(banner);
-	}
 
 	conn->st_ssh_channel = ssh_channel_new(conn->st_ssh_session);
 	ssh_channel_open_session(conn->st_ssh_channel );

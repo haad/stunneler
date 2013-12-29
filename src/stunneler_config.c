@@ -133,6 +133,13 @@ conf_get_login(st_config_t json)
 }
 
 char *
+conf_get_pass(st_config_t json)
+{
+
+  return cJSON_GetItemString(json, "rem_pass");
+}
+
+char *
 conf_get_address(st_config_t json)
 {
 
