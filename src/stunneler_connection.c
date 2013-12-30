@@ -178,7 +178,8 @@ error:
  * TODO: This doesn't work on SSHv2 servers they need ssh_userauth_kbdint.
  */
 static int
-st_ssh_pass_auth(st_config_t conf, ssh_session session) {
+st_ssh_pass_auth(st_config_t conf, ssh_session session)
+{
 	int rc;
 
 	rc = ssh_userauth_password(session, NULL, conf_get_pass(conf));
@@ -253,12 +254,82 @@ st_setup_connection(st_cn_t conn)
 
 }
 
+static int
+st_ssh_channel_create(st_cn_t conn)
+{
+	int nbytes;
+	char buffer[512];
+
+	conn->st_ssh_channel = ssh_channel_new(conn->st_ssh_session);
+	ssh_channel_open_session(conn->st_ssh_channel);
+	ssh_channel_request_exec(conn->st_ssh_channel , "ls -la");
+
+	nbytes = ssh_channel_read(conn->st_ssh_channel , buffer, sizeof(buffer), 0);
+	while (nbytes > 0) {
+		if (fwrite(buffer, 1, nbytes, stdout) != (unsigned int) nbytes) {
+			printf("ASDASDASD\n");
+		}
+		nbytes = ssh_channel_read(conn->st_ssh_channel , buffer, sizeof(buffer), 0);
+	}
+
+	return 0;
+}
+
+static int
+st_ssh_forward_create(st_cn_t conn)
+{
+	int rc;
+	ssh_channel channel;
+	char buffer[256];
+	int nbytes, nwritten;
+
+	rc = ssh_forward_listen(conn->st_ssh_session, NULL, 34567, NULL);
+	if (rc != SSH_OK)
+	{
+		fprintf(stderr, "Error opening remote port: %s\n",
+	 	ssh_get_error(conn->st_ssh_session));
+	 	return rc;
+	}
+
+	channel = ssh_forward_accept(conn->st_ssh_session, 60000);
+	if (channel == NULL)
+	{
+		fprintf(stderr, "Error waiting for incoming connection: %s\n",
+		ssh_get_error(conn->st_ssh_session));
+		return SSH_ERROR;
+	}
+	while (1)
+	{
+		nbytes = ssh_channel_read(channel, buffer, sizeof(buffer), 0);
+		if (nbytes < 0)
+		{
+			fprintf(stderr, "Error reading incoming data: %s\n",
+			ssh_get_error(conn->st_ssh_session));
+			ssh_channel_send_eof(channel);
+			ssh_channel_free(channel);
+			return SSH_ERROR;
+		}
+		if (strncmp(buffer, "GET /", 5)) continue;
+		nbytes = strlen("ASDASDSAD");
+		nwritten = ssh_channel_write(channel, "ASDASDSAD", nbytes);
+		if (nwritten != nbytes)
+		{
+			fprintf(stderr, "Error sending answer: %s\n",
+			ssh_get_error(conn->st_ssh_session));
+			ssh_channel_send_eof(channel);
+			ssh_channel_free(channel);
+			return SSH_ERROR;
+		}
+	printf("Sent answer\n");
+	}
+	ssh_channel_send_eof(channel);
+	ssh_channel_free(channel);
+}
+
 int
 st_ssh_connect(st_cn_t conn)
 {
 	st_config_t conf = conn->st_config;
-	int nbytes;
-	char buffer[256];
 
 	st_setup_connection(conn);
 
@@ -279,17 +350,10 @@ st_ssh_connect(st_cn_t conn)
 	printf("Trying to connect to server\n");
 	st_auth_connection(conn);
 
-	conn->st_ssh_channel = ssh_channel_new(conn->st_ssh_session);
-	ssh_channel_open_session(conn->st_ssh_channel );
-	ssh_channel_request_exec(conn->st_ssh_channel , "ls -la");
+	printf("Creating a channel\n");
+	st_ssh_channel_create(conn);
+	st_ssh_forward_create(conn);
 
-	nbytes = ssh_channel_read(conn->st_ssh_channel , buffer, sizeof(buffer), 0);
-	while (nbytes > 0) {
-		if (fwrite(buffer, 1, nbytes, stdout) != (unsigned int) nbytes) {
-			printf("ASDASDASD\n");
-		}
-		nbytes = ssh_channel_read(conn->st_ssh_channel , buffer, sizeof(buffer), 0);
-	}
-
+	st_connection_destroy(conn);
 	return 0;
 }

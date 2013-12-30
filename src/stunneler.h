@@ -25,8 +25,8 @@ typedef cJSON * st_config_t;
 struct stunel_ssh_opts {
   ssh_session st_session;
   ssh_channel st_channel;
-  ssh_key st_priv_key;
-  ssh_key st_pub_key;
+  ssh_key st_priv_key; /* unused */
+  ssh_key st_pub_key; /* unused */
 };
 typedef struct stunel_ssh_opts * stunel_ssh_opts_t;
 
