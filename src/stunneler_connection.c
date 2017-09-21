@@ -132,25 +132,15 @@ static int
 st_ssh_file_pubauth(st_config_t conf, ssh_session session)
 {
 	ssh_key priv_key;
-	ssh_key pub_key;
 	int rc;
 
 	priv_key = NULL;
-	pub_key = NULL;
 
 	/* First import private key from file */
 	rc = ssh_pki_import_privkey_file(conf_get_sshkey(conf), NULL, NULL, NULL, &priv_key);
 	if (rc != SSH_OK) {
 		fprintf(stderr, "Error ssh_pki_import_privkey_file from %s, error = %d, rc = %d\n", conf_get_sshkey(conf),
 			ssh_get_error_code(session), rc);
-		goto error;
-	}
-
-	/* Export public key from private key */
-	rc = ssh_pki_export_privkey_to_pubkey(priv_key, &pub_key);
-	if (rc != SSH_OK) {
-		fprintf(stderr, "Error ssh_pki_export_privkey_to_pubkey to %s, error = %s, rc = %d\n", conf_get_sshkey(conf),
-			ssh_get_error(session), rc);
 		goto error;
 	}
 
@@ -165,9 +155,6 @@ st_ssh_file_pubauth(st_config_t conf, ssh_session session)
 error:
 	if (priv_key)
 		ssh_key_free(priv_key);
-
-	if (pub_key)
-		ssh_key_free(pub_key);
 
 	return rc;
 }
