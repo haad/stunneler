@@ -135,8 +135,8 @@ st_ssh_file_pubauth(st_config_t conf, ssh_session session)
 	ssh_key pub_key;
 	int rc;
 
-	priv_key = ssh_key_new();
-	pub_key = ssh_key_new();
+	priv_key = NULL;
+	pub_key = NULL;
 
 	/* First import private key from file */
 	rc = ssh_pki_import_privkey_file(conf_get_sshkey(conf), NULL, NULL, NULL, &priv_key);
