@@ -16,8 +16,8 @@ COPTS=-std=c99 -pedantic -Wall \
 COPTS+=-g -O0 -fno-omit-frame-pointer  -fno-common -fstrict-aliasing
 endif
 
-CFLAGS=-I dist/cjson $(COPTS)
-LDFLAGS=  -lssh -lcurl -lssh_threads
+CFLAGS=-I dist/cjson $(COPTS) -D_GNU_SOURCE
+LDFLAGS=  -lssh -lcurl -lssh_threads -lm
 
 SOURCES:=$(wildcard src/*.c) $(wildcard dist/cjson/cJSON.c)
 

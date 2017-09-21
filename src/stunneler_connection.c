@@ -49,7 +49,7 @@ static void st_setup_connection(st_cn_t);
   * Allocate new connection.
   */
 st_cn_t
-st_connection_alloc()
+st_connection_alloc(void)
 {
 	st_cn_t conn;
 
